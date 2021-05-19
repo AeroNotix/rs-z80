@@ -165,6 +165,8 @@ impl Opcode {
                 2 => Instruction::DJNZ,
                 3 => Instruction::JR(Operand::Immediate8),
                 4..=7 => Instruction::ConditionalJR(
+                    // -4 because that's just how it works.
+
                     CONDITION_TABLE[self.y as usize - 4], Operand::Immediate8,
                 ),
                 _ => Instruction::Unknown,
