@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 
-const REGISTER_TABLE_8_BIT: [Register8Bit; 8] = [
+const REGISTER_TABLE_8_BIT: [Register8Bit; 7] = [
+    Register8Bit::A,
     Register8Bit::B,
     Register8Bit::C,
     Register8Bit::D,
     Register8Bit::E,
     Register8Bit::H,
     Register8Bit::L,
-    Register8Bit::HL,
-    Register8Bit::A,
 ];
 
 const REGISTER_TABLE_SP: [Register16Bit; 4] = [
@@ -40,17 +39,6 @@ pub enum Condition {
     Carry,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Flag {
-    Carry(bool),
-    AddSubtract(bool),
-    ParityOverflow(bool),
-    HalfCarry(bool),
-    Zero(bool),
-    Sign(bool),
-    X(bool),
-}
-
 #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq)]
 pub enum Register8Bit {
     A,
@@ -58,16 +46,8 @@ pub enum Register8Bit {
     C,
     D,
     E,
-    F,
     H,
     L,
-    HL,
-    I,
-    R,
-    IXH,
-    IXL,
-    IYH,
-    IYL,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,10 +56,7 @@ pub enum Register16Bit {
     BC,
     DE,
     HL,
-    PC,
     SP,
-    IX,
-    IY,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -95,27 +72,34 @@ pub enum Operand {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
+    NOP,
+    Halt,
+
+    In(Operand, u8),
+    Out(u8, Operand),
+
     Add(Operand, Operand),
-    DJNZ,
+    Inc(Operand),
+    Dec(Operand),
+
     Call(Operand),
     ConditionalRet(Condition),
-    Dec(Operand),
+
+    DJNZ,
     Exchange(Operand, Operand),
-    Halt,
-    In(Operand, u8),
-    Inc(Operand),
+
     LD(Operand, Operand),
-    NOP,
-    Out(u8, Operand),
+
     Pop(Operand),
     Push(Operand),
+
     UnconditionalRet,
-    Unknown,
     EXX,
     RST,
     RES(u8, Operand),
     BIT(u8, Operand),
     SET(u8, Operand),
+
     JR(Operand),
     ConditionalJR(Condition, Operand),
 
@@ -127,11 +111,12 @@ pub enum Instruction {
     CPL,
     SCF,
     CCF,
+
+    Unknown,
 }
 
 pub struct CPU {
     registers: HashMap<Register8Bit, Box<u8>>,
-    opcode_decoder: OpcodeDecoder,
 }
 
 impl CPU {
@@ -164,7 +149,7 @@ pub struct Opcode {
 }
 
 impl Opcode {
-    pub fn new(raw_opcode: u8) -> Opcode {
+    pub fn from_u8(raw_opcode: u8) -> Opcode {
         // From: http://www.z80.info/decoding.htm
 
         // Essentially:
@@ -182,60 +167,63 @@ impl Opcode {
     }
 
     fn decode_x0(self) -> Instruction {
+        use Instruction::*;
+        use Register16Bit::*;
+        use Register8Bit::*;
         match self.z {
             0 => match self.y {
-                0 => Instruction::NOP,
-                1 => Instruction::Exchange(
-                    Operand::Register16Bit(Register16Bit::AF),
-                    Operand::Register16Bit(Register16Bit::AF),
+                0 => NOP,
+                1 => Exchange(
+                    Operand::Register16Bit(AF),
+                    Operand::Register16Bit(AF),
                 ),
-                2 => Instruction::DJNZ,
-                3 => Instruction::JR(Operand::Immediate8),
-                4..=7 => Instruction::ConditionalJR(
+                2 => DJNZ,
+                3 => JR(Operand::Immediate8),
+                4..=7 => ConditionalJR(
                     // -4 because that's just how it works.
 
                     CONDITION_TABLE[self.y as usize - 4], Operand::Immediate8,
                 ),
-                _ => Instruction::Unknown,
+                _ => Unknown,
             },
             1 => match self.q {
-                0 => Instruction::LD(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize]), Operand::Immediate16),
-                1 => Instruction::Add(Operand::Register16Bit(Register16Bit::HL), Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
-                _ => Instruction::Unknown,
+                0 => LD(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize]), Operand::Immediate16),
+                1 => Add(Operand::Register16Bit(HL), Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                _ => Unknown,
 
             },
             2 => match (self.q, self.p) {
-                (0, 0) => Instruction::LD(Operand::Indirect16Bit(Register16Bit::BC), Operand::Register8Bit(Register8Bit::A)),
-                (0, 1) => Instruction::LD(Operand::Indirect16Bit(Register16Bit::DE), Operand::Register8Bit(Register8Bit::A)),
-                (0, 2) => Instruction::LD(Operand::IndirectImmediate, Operand::Register16Bit(Register16Bit::HL)),
-                (0, 3) => Instruction::LD(Operand::IndirectImmediate, Operand::Register8Bit(Register8Bit::A)),
-                (1, 0) => Instruction::LD(Operand::Register8Bit(Register8Bit::A), Operand::Indirect16Bit(Register16Bit::BC)),
-                (1, 1) => Instruction::LD(Operand::Register8Bit(Register8Bit::A), Operand::Indirect16Bit(Register16Bit::DE)),
-                (1, 2) => Instruction::LD(Operand::Register16Bit(Register16Bit::HL), Operand::IndirectImmediate),
-                (1, 3) => Instruction::LD(Operand::Register8Bit(Register8Bit::A), Operand::IndirectImmediate),
-                _ => Instruction::Unknown,
+                (0, 0) => LD(Operand::Indirect16Bit(BC), Operand::Register8Bit(A)),
+                (0, 1) => LD(Operand::Indirect16Bit(DE), Operand::Register8Bit(A)),
+                (0, 2) => LD(Operand::IndirectImmediate, Operand::Register16Bit(HL)),
+                (0, 3) => LD(Operand::IndirectImmediate, Operand::Register8Bit(A)),
+                (1, 0) => LD(Operand::Register8Bit(A),   Operand::Indirect16Bit(BC)),
+                (1, 1) => LD(Operand::Register8Bit(A),   Operand::Indirect16Bit(DE)),
+                (1, 2) => LD(Operand::Register16Bit(HL), Operand::IndirectImmediate),
+                (1, 3) => LD(Operand::Register8Bit(A),   Operand::IndirectImmediate),
+                _ => Unknown,
             },
             3 => match self.q {
-                0 => Instruction::Inc(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
-                1 => Instruction::Dec(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
-                _ => Instruction::Unknown,
+                0 => Inc(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                1 => Dec(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                _ => Unknown,
             }
-            4 => Instruction::Inc(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
-            5 => Instruction::Dec(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
-            6 => Instruction::LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
+            4 => Inc(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
+            5 => Dec(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
+            6 => LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
             7 => match self.y {
-                0 => Instruction::RLCA,
-                1 => Instruction::RRCA,
-                2 => Instruction::RLA,
-                3 => Instruction::RRA,
-                4 => Instruction::DAA,
-                5 => Instruction::CPL,
-                6 => Instruction::SCF,
-                7 => Instruction::CCF,
-                _ => Instruction::Unknown,
+                0 => RLCA,
+                1 => RRCA,
+                2 => RLA,
+                3 => RRA,
+                4 => DAA,
+                5 => CPL,
+                6 => SCF,
+                7 => CCF,
+                _ => Unknown,
 
             }
-            _ => Instruction::Unknown,
+            _ => Unknown,
         }
     }
 
@@ -267,7 +255,7 @@ mod tests {
     fn run_test(rom: &str, expected_program: Vec<Instruction>) {
         let program: Vec<Instruction> = fs::read(rom).expect("Unable to read file")
             .iter()
-            .map(|x| Opcode::new(*x).decode())
+            .map(|x| Opcode::from_u8(*x).decode())
             .collect();
         assert_eq!(&program[..], &expected_program[..])
     }
@@ -309,9 +297,9 @@ mod tests {
     #[test]
     fn x_table_all_valid() {
         for x in 0..0b00111111 {
-            let raw_opcode = Opcode::new(x);
+            let raw_opcode = Opcode::from_u8(x);
             println!("0x{:x} - {:?}", x, raw_opcode.decode());
-            if let Instruction::Unknown = Opcode::new(x).decode() {
+            if let Instruction::Unknown = Opcode::from_u8(x).decode() {
                 panic!("Should not be an Uknown opcode in the z=0 table");
             }
         }
