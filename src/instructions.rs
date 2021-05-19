@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 const REGISTER_TABLE_8_BIT: [Register8Bit; 8] = [
     Register8Bit::B,
     Register8Bit::C,
@@ -49,7 +51,7 @@ pub enum Flag {
     X(bool),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, Copy, PartialEq, Eq)]
 pub enum Register8Bit {
     A,
     B,
@@ -125,6 +127,31 @@ pub enum Instruction {
     CPL,
     SCF,
     CCF,
+}
+
+pub struct CPU {
+    registers: HashMap<Register8Bit, Box<u8>>,
+    opcode_decoder: OpcodeDecoder,
+}
+
+impl CPU {
+    pub fn new() -> CPU {
+        CPU {
+            registers: [
+                (Register8Bit::A, Box::new(0)),
+                (Register8Bit::B, Box::new(0)),
+                (Register8Bit::C, Box::new(0)),
+                (Register8Bit::D, Box::new(0)),
+                (Register8Bit::E, Box::new(0)),
+                (Register8Bit::H, Box::new(0)),
+                (Register8Bit::L, Box::new(0)),
+            ].iter().cloned().collect()
+        }
+    }
+
+    pub fn ld(to: &mut u8, from: u8) {
+        *to = from;
+    }
 }
 
 #[derive(Debug)]
