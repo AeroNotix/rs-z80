@@ -1,27 +1,27 @@
 use std::collections::HashMap;
 
-const REGISTER_TABLE_8_BIT: [Register8Bit; 7] = [
-    Register8Bit::A,
-    Register8Bit::B,
-    Register8Bit::C,
-    Register8Bit::D,
-    Register8Bit::E,
-    Register8Bit::H,
-    Register8Bit::L,
+const REGISTER_TABLE_8_BIT: [Register; 7] = [
+    Register::A,
+    Register::B,
+    Register::C,
+    Register::D,
+    Register::E,
+    Register::H,
+    Register::L,
 ];
 
-const REGISTER_TABLE_SP: [Register16Bit; 4] = [
-    Register16Bit::BC,
-    Register16Bit::DE,
-    Register16Bit::HL,
-    Register16Bit::SP,
+const REGISTER_TABLE_SP: [Register; 4] = [
+    Register::BC,
+    Register::DE,
+    Register::HL,
+    Register::SP,
 ];
 
-const REGISTER_TABLE_AF: [Register16Bit; 4] = [
-    Register16Bit::BC,
-    Register16Bit::DE,
-    Register16Bit::HL,
-    Register16Bit::AF,
+const REGISTER_TABLE_AF: [Register; 4] = [
+    Register::BC,
+    Register::DE,
+    Register::HL,
+    Register::AF,
 ];
 
 const CONDITION_TABLE: [Condition; 4] = [
@@ -40,7 +40,7 @@ pub enum Condition {
 }
 
 #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq)]
-pub enum Register8Bit {
+pub enum Register {
     A,
     B,
     C,
@@ -48,15 +48,10 @@ pub enum Register8Bit {
     E,
     H,
     L,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Register16Bit {
     AF,
     BC,
     DE,
     HL,
-    SP,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -64,10 +59,9 @@ pub enum Operand {
     Immediate16,
     Immediate8,
     IndirectImmediate,
-    Indirect16Bit(Register16Bit),
-    Indirect16BitWithOffset(Register16Bit, Box<Operand>),
-    Register16Bit(Register16Bit),
-    Register8Bit(Register8Bit),
+    IndirectRegister(Register),
+    IndirectWithOffset(Register, Box<Operand>),
+    Register(Register),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -116,20 +110,20 @@ pub enum Instruction {
 }
 
 pub struct CPU {
-    registers: HashMap<Register8Bit, Box<u8>>,
+    registers: HashMap<Register, Box<u8>>,
 }
 
 impl CPU {
     pub fn new() -> CPU {
         CPU {
             registers: [
-                (Register8Bit::A, Box::new(0)),
-                (Register8Bit::B, Box::new(0)),
-                (Register8Bit::C, Box::new(0)),
-                (Register8Bit::D, Box::new(0)),
-                (Register8Bit::E, Box::new(0)),
-                (Register8Bit::H, Box::new(0)),
-                (Register8Bit::L, Box::new(0)),
+                (Register::A, Box::new(0)),
+                (Register::B, Box::new(0)),
+                (Register::C, Box::new(0)),
+                (Register::D, Box::new(0)),
+                (Register::E, Box::new(0)),
+                (Register::H, Box::new(0)),
+                (Register::L, Box::new(0)),
             ].iter().cloned().collect()
         }
     }
@@ -168,49 +162,47 @@ impl Opcode {
 
     fn decode_x0(self) -> Instruction {
         use Instruction::*;
-        use Register16Bit::*;
-        use Register8Bit::*;
+        use Register::*;
         match self.z {
             0 => match self.y {
                 0 => NOP,
                 1 => Exchange(
-                    Operand::Register16Bit(AF),
-                    Operand::Register16Bit(AF),
+                    Operand::Register(AF),
+                    Operand::Register(AF),
                 ),
                 2 => DJNZ,
                 3 => JR(Operand::Immediate8),
                 4..=7 => ConditionalJR(
                     // -4 because that's just how it works.
-
                     CONDITION_TABLE[self.y as usize - 4], Operand::Immediate8,
                 ),
                 _ => Unknown,
             },
             1 => match self.q {
-                0 => LD(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize]), Operand::Immediate16),
-                1 => Add(Operand::Register16Bit(HL), Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                0 => LD(Operand::Register(REGISTER_TABLE_SP[self.p as usize]), Operand::Immediate16),
+                1 => Add(Operand::Register(HL), Operand::Register(REGISTER_TABLE_SP[self.p as usize])),
                 _ => Unknown,
 
             },
             2 => match (self.q, self.p) {
-                (0, 0) => LD(Operand::Indirect16Bit(BC), Operand::Register8Bit(A)),
-                (0, 1) => LD(Operand::Indirect16Bit(DE), Operand::Register8Bit(A)),
-                (0, 2) => LD(Operand::IndirectImmediate, Operand::Register16Bit(HL)),
-                (0, 3) => LD(Operand::IndirectImmediate, Operand::Register8Bit(A)),
-                (1, 0) => LD(Operand::Register8Bit(A),   Operand::Indirect16Bit(BC)),
-                (1, 1) => LD(Operand::Register8Bit(A),   Operand::Indirect16Bit(DE)),
-                (1, 2) => LD(Operand::Register16Bit(HL), Operand::IndirectImmediate),
-                (1, 3) => LD(Operand::Register8Bit(A),   Operand::IndirectImmediate),
+                (0, 0) => LD(Operand::IndirectRegister(BC), Operand::Register(A)),
+                (0, 1) => LD(Operand::IndirectRegister(DE), Operand::Register(A)),
+                (0, 2) => LD(Operand::IndirectImmediate,    Operand::Register(HL)),
+                (0, 3) => LD(Operand::IndirectImmediate,    Operand::Register(A)),
+                (1, 0) => LD(Operand::Register(A),          Operand::IndirectRegister(BC)),
+                (1, 1) => LD(Operand::Register(A),          Operand::IndirectRegister(DE)),
+                (1, 2) => LD(Operand::Register(HL),         Operand::IndirectImmediate),
+                (1, 3) => LD(Operand::Register(A),          Operand::IndirectImmediate),
                 _ => Unknown,
             },
             3 => match self.q {
-                0 => Inc(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
-                1 => Dec(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                0 => Inc(Operand::Register(REGISTER_TABLE_SP[self.p as usize])),
+                1 => Dec(Operand::Register(REGISTER_TABLE_SP[self.p as usize])),
                 _ => Unknown,
             }
-            4 => Inc(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
-            5 => Dec(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
-            6 => LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
+            4 => Inc(Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize])),
+            5 => Dec(Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize])),
+            6 => LD(Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
             7 => match self.y {
                 0 => RLCA,
                 1 => RRCA,
@@ -232,8 +224,8 @@ impl Opcode {
             return Instruction::Halt;
         }
         Instruction::LD(
-            Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]),
-            Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.z as usize]),
+            Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize]),
+            Operand::Register(REGISTER_TABLE_8_BIT[self.z as usize]),
         )
     }
 
@@ -264,20 +256,20 @@ mod tests {
     fn ld() {
         let expected_program = vec![
             Instruction::LD(
-                Operand::Register8Bit(Register8Bit::A),
-                Operand::Register8Bit(Register8Bit::B),
+                Operand::Register(Register::A),
+                Operand::Register(Register::B),
             ),
             Instruction::LD(
-                Operand::Register8Bit(Register8Bit::B),
-                Operand::Register8Bit(Register8Bit::C),
+                Operand::Register(Register::B),
+                Operand::Register(Register::C),
             ),
             Instruction::LD(
-                Operand::Register8Bit(Register8Bit::C),
-                Operand::Register8Bit(Register8Bit::D),
+                Operand::Register(Register::C),
+                Operand::Register(Register::D),
             ),
             Instruction::LD(
-                Operand::Register8Bit(Register8Bit::D),
-                Operand::Register8Bit(Register8Bit::E),
+                Operand::Register(Register::D),
+                Operand::Register(Register::E),
             ),
         ];
         run_test("src/roms/ld.rom", expected_program);
@@ -286,10 +278,10 @@ mod tests {
     #[test]
     fn inc_dec() {
         let expected_program = vec![
-            Instruction::Inc(Operand::Register8Bit(Register8Bit::A)),
-            Instruction::Inc(Operand::Register8Bit(Register8Bit::B)),
-            Instruction::Dec(Operand::Register8Bit(Register8Bit::A)),
-            Instruction::Dec(Operand::Register8Bit(Register8Bit::B)),
+            Instruction::Inc(Operand::Register(Register::A)),
+            Instruction::Inc(Operand::Register(Register::B)),
+            Instruction::Dec(Operand::Register(Register::A)),
+            Instruction::Dec(Operand::Register(Register::B)),
         ];
         run_test("src/roms/inc_dec.rom", expected_program);
     }
