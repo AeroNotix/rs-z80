@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
-const REGISTER_TABLE_8_BIT: [Register; 7] = [
-    Register::A,
+const REGISTER_TABLE_8_BIT: [Register; 8] = [
     Register::B,
     Register::C,
     Register::D,
     Register::E,
     Register::H,
     Register::L,
+    Register::HL,
+    Register::A,
 ];
 
 const REGISTER_TABLE_SP: [Register; 4] = [
@@ -52,6 +53,7 @@ pub enum Register {
     BC,
     DE,
     HL,
+    SP,
 }
 
 #[derive(Debug, PartialEq, Eq)]
