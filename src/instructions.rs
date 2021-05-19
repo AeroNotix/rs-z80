@@ -278,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_x_table_no_panic() {
+    fn x_table_all_valid() {
         for x in 0..0b00111111 {
             let raw_opcode = Opcode::new(x);
             println!("0x{:x} - {:?}", x, raw_opcode.decode());
