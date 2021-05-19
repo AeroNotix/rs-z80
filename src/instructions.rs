@@ -63,7 +63,7 @@ pub enum Operand {
     IndirectImmediate,
     IndirectRegister(Register),
     IndirectWithOffset(Register, Box<Operand>),
-    Register(Register),
+    CPURegister(Register),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -165,46 +165,47 @@ impl Opcode {
     fn decode_x0(self) -> Instruction {
         use Instruction::*;
         use Register::*;
+        use Operand::*;
         match self.z {
             0 => match self.y {
                 0 => NOP,
                 1 => Exchange(
-                    Operand::Register(AF),
-                    Operand::Register(AF),
+                    CPURegister(AF),
+                    CPURegister(AF),
                 ),
                 2 => DJNZ,
-                3 => JR(Operand::Immediate8),
+                3 => JR(Immediate8),
                 4..=7 => ConditionalJR(
                     // -4 because that's just how it works.
-                    CONDITION_TABLE[self.y as usize - 4], Operand::Immediate8,
+                    CONDITION_TABLE[self.y as usize - 4], Immediate8,
                 ),
                 _ => Unknown,
             },
             1 => match self.q {
-                0 => LD(Operand::Register(REGISTER_TABLE_SP[self.p as usize]), Operand::Immediate16),
-                1 => Add(Operand::Register(HL), Operand::Register(REGISTER_TABLE_SP[self.p as usize])),
+                0 => LD(CPURegister(REGISTER_TABLE_SP[self.p as usize]), Immediate16),
+                1 => Add(CPURegister(HL), CPURegister(REGISTER_TABLE_SP[self.p as usize])),
                 _ => Unknown,
 
             },
             2 => match (self.q, self.p) {
-                (0, 0) => LD(Operand::IndirectRegister(BC), Operand::Register(A)),
-                (0, 1) => LD(Operand::IndirectRegister(DE), Operand::Register(A)),
-                (0, 2) => LD(Operand::IndirectImmediate,    Operand::Register(HL)),
-                (0, 3) => LD(Operand::IndirectImmediate,    Operand::Register(A)),
-                (1, 0) => LD(Operand::Register(A),          Operand::IndirectRegister(BC)),
-                (1, 1) => LD(Operand::Register(A),          Operand::IndirectRegister(DE)),
-                (1, 2) => LD(Operand::Register(HL),         Operand::IndirectImmediate),
-                (1, 3) => LD(Operand::Register(A),          Operand::IndirectImmediate),
+                (0, 0) => LD(IndirectRegister(BC), CPURegister(A)),
+                (0, 1) => LD(IndirectRegister(DE), CPURegister(A)),
+                (0, 2) => LD(IndirectImmediate, CPURegister(HL)),
+                (0, 3) => LD(IndirectImmediate, CPURegister(A)),
+                (1, 0) => LD(CPURegister(A), IndirectRegister(BC)),
+                (1, 1) => LD(CPURegister(A), IndirectRegister(DE)),
+                (1, 2) => LD(CPURegister(HL), IndirectImmediate),
+                (1, 3) => LD(CPURegister(A), IndirectImmediate),
                 _ => Unknown,
             },
             3 => match self.q {
-                0 => Inc(Operand::Register(REGISTER_TABLE_SP[self.p as usize])),
-                1 => Dec(Operand::Register(REGISTER_TABLE_SP[self.p as usize])),
+                0 => Inc(CPURegister(REGISTER_TABLE_SP[self.p as usize])),
+                1 => Dec(CPURegister(REGISTER_TABLE_SP[self.p as usize])),
                 _ => Unknown,
             }
-            4 => Inc(Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize])),
-            5 => Dec(Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize])),
-            6 => LD(Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
+            4 => Inc(CPURegister(REGISTER_TABLE_8_BIT[self.y as usize])),
+            5 => Dec(CPURegister(REGISTER_TABLE_8_BIT[self.y as usize])),
+            6 => LD(CPURegister(REGISTER_TABLE_8_BIT[self.y as usize]), Immediate8),
             7 => match self.y {
                 0 => RLCA,
                 1 => RRCA,
@@ -226,8 +227,8 @@ impl Opcode {
             return Instruction::Halt;
         }
         Instruction::LD(
-            Operand::Register(REGISTER_TABLE_8_BIT[self.y as usize]),
-            Operand::Register(REGISTER_TABLE_8_BIT[self.z as usize]),
+            Operand::CPURegister(REGISTER_TABLE_8_BIT[self.y as usize]),
+            Operand::CPURegister(REGISTER_TABLE_8_BIT[self.z as usize]),
         )
     }
 
@@ -245,6 +246,9 @@ impl Opcode {
 mod tests {
     use super::*;
     use std::fs;
+    use Register::*;
+    use Instruction::*;
+    use Operand::*;
 
     fn run_test(rom: &str, expected_program: Vec<Instruction>) {
         let program: Vec<Instruction> = fs::read(rom).expect("Unable to read file")
@@ -257,22 +261,10 @@ mod tests {
     #[test]
     fn ld() {
         let expected_program = vec![
-            Instruction::LD(
-                Operand::Register(Register::A),
-                Operand::Register(Register::B),
-            ),
-            Instruction::LD(
-                Operand::Register(Register::B),
-                Operand::Register(Register::C),
-            ),
-            Instruction::LD(
-                Operand::Register(Register::C),
-                Operand::Register(Register::D),
-            ),
-            Instruction::LD(
-                Operand::Register(Register::D),
-                Operand::Register(Register::E),
-            ),
+            LD(CPURegister(Register::A), CPURegister(Register::B)),
+            LD(CPURegister(Register::B), CPURegister(Register::C)),
+            LD(CPURegister(Register::C), CPURegister(Register::D)),
+            LD(CPURegister(Register::D), CPURegister(Register::E)),
         ];
         run_test("src/roms/ld.rom", expected_program);
     }
@@ -280,10 +272,10 @@ mod tests {
     #[test]
     fn inc_dec() {
         let expected_program = vec![
-            Instruction::Inc(Operand::Register(Register::A)),
-            Instruction::Inc(Operand::Register(Register::B)),
-            Instruction::Dec(Operand::Register(Register::A)),
-            Instruction::Dec(Operand::Register(Register::B)),
+            Inc(CPURegister(A)),
+            Inc(CPURegister(B)),
+            Dec(CPURegister(A)),
+            Dec(CPURegister(B)),
         ];
         run_test("src/roms/inc_dec.rom", expected_program);
     }
@@ -293,7 +285,7 @@ mod tests {
         for x in 0..0b00111111 {
             let raw_opcode = Opcode::from_u8(x);
             println!("0x{:x} - {:?}", x, raw_opcode.decode());
-            if let Instruction::Unknown = Opcode::from_u8(x).decode() {
+            if let Unknown = Opcode::from_u8(x).decode() {
                 panic!("Should not be an Uknown opcode in the z=0 table");
             }
         }
