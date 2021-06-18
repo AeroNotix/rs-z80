@@ -23,6 +23,14 @@ const REGISTER_TABLE_AF: [Register16Bit; 4] = [
     Register16Bit::AF,
 ];
 
+const CONDITION_TABLE: [Condition; 5] = [
+    Condition::NotZero,
+    Condition::Zero,
+    Condition::NoCarry,
+    Condition::Carry,
+    Condition::ParityOverflow,
+];
+
 #[derive(Debug)]
 pub enum Condition {
     NotZero,
@@ -30,18 +38,17 @@ pub enum Condition {
     NoCarry,
     Carry,
     ParityOverflow,
-
 }
 
 #[derive(Debug)]
 pub enum Flag {
-    Carry,
-    AddSubtract,
-    ParityOverflow,
-    HalfCarry,
-    Zero,
-    Sign,
-    X,
+    Carry(bool),
+    AddSubtract(bool),
+    ParityOverflow(bool),
+    HalfCarry(bool),
+    Zero(bool),
+    Sign(bool),
+    X(bool),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -78,17 +85,39 @@ pub enum Register16Bit {
 #[derive(Debug)]
 pub enum Operand {
     Address(u16),
+    Immediate16(u16),
     Immediate(u8),
     Indirect16Bit(Register16Bit),
     Indirect16BitWithOffset(Register16Bit, u8),
+    Register16Bit(Register16Bit),
     Register8Bit(Register8Bit),
 }
 
 #[derive(Debug)]
 pub enum Instruction {
-    LD(Operand, Operand),
+    Add(Operand, Operand),
+    DJNZ,
+    Call(Operand),
+    ConditionalRet(Condition),
+    Dec(Operand),
+    Exchange(Operand, Operand),
     Halt,
+    In(Operand, u8),
+    Inc(Operand),
+    LD(Operand, Operand),
+    NOP,
+    Out(u8, Operand),
+    Pop(Operand),
+    Push(Operand),
+    UnconditionalRet,
     Unknown,
+    EXX,
+    RST,
+    RES(u8, Operand),
+    BIT(u8, Operand),
+    SET(u8, Operand),
+    JR(u8),
+    ConditionalJR(Condition, u8),
 }
 
 #[derive(Debug)]
@@ -111,14 +140,65 @@ impl Opcode {
         }
     }
 
+    fn decode_x0(self) -> Instruction {
+        match self.z {
+            0 => match self.y {
+                0 => Instruction::NOP,
+                1 => Instruction::Exchange(
+                    Operand::Register16Bit(Register16Bit::AF),
+                    Operand::Register16Bit(Register16Bit::AF),
+                ),
+                2 => Instruction::DJNZ,
+                // TODO: Some instructions are multi-byte.
+                //
+                // Opcode decoder should act on a stream and
+                // conditionally read bytes from the stream when
+                // needed.
+                3 => Instruction::JR(99),
+                4..=7 => Instruction::ConditionalJR(
+                    Condition::Carry, 123,
+                ),
+                _ => Instruction::Unknown,
+            },
+            1 => match self.q {
+                // TODO: Take which register from self.p / rp[p]
+                0 => Instruction::LD(Operand::Register16Bit(Register16Bit::AF), Operand::Immediate16(0)),
+                // TODO: Take which register from self.p / rp[p]
+                1 => Instruction::Add(Operand::Register16Bit(Register16Bit::HL), Operand::Register16Bit(Register16Bit::AF)),
+                _ => Instruction::Unknown,
+
+            },
+            // TODO: Implement this section when z=2
+            2 => Instruction::Unknown,
+            3 => match self.q {
+                0 => Instruction::Inc(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                1 => Instruction::Dec(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
+                _ => Instruction::Unknown,
+            }
+            4 => Instruction::Inc(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
+            5 => Instruction::Dec(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
+            6 => Instruction::LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate(0)),
+            // TODO: Implement this section when z=7
+            7 => Instruction::Unknown,
+            _ => Instruction::Unknown,
+        }
+    }
+
+    fn decode_x1(self) -> Instruction {
+        if self.y == 6 {
+            return Instruction::Halt;
+        }
+        Instruction::LD(
+            Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]),
+            Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.z as usize]),
+        )
+    }
+
     pub fn decode(self) -> Instruction {
         println!("{:?}", self);
         match self.x {
-            1 if self.y == 6 => Instruction::Halt,
-            1 => Instruction::LD(
-                Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]),
-                Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.z as usize]),
-            ),
+            0 => self.decode_x0(),
+            1 => self.decode_x1(),
             _ => Instruction::Unknown,
         }
     }
