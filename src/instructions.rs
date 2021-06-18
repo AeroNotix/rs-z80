@@ -117,6 +117,15 @@ pub enum Instruction {
     SET(u8, Operand),
     JR(u8),
     ConditionalJR(Condition, u8),
+
+    RLCA,
+    RRCA,
+    RLA,
+    RRA,
+    DAA,
+    CPL,
+    SCF,
+    CCF,
 }
 
 #[derive(Debug)]
@@ -183,6 +192,17 @@ impl Opcode {
             5 => Instruction::Dec(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
             6 => Instruction::LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
             7 => match self.y {
+                0 => Instruction::RLCA,
+                1 => Instruction::RRCA,
+                2 => Instruction::RLA,
+                3 => Instruction::RRA,
+                4 => Instruction::DAA,
+                5 => Instruction::CPL,
+                6 => Instruction::SCF,
+                7 => Instruction::CCF,
+                _ => Instruction::Unknown,
+
+            }
             _ => Instruction::Unknown,
         }
     }
