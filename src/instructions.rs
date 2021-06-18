@@ -86,6 +86,7 @@ pub enum Register16Bit {
 pub enum Operand {
     Immediate16,
     Immediate8,
+    IndirectImmediate,
     Indirect16Bit(Register16Bit),
     Indirect16BitWithOffset(Register16Bit, Box<Operand>),
     Register16Bit(Register16Bit),
@@ -181,8 +182,17 @@ impl Opcode {
                 _ => Instruction::Unknown,
 
             },
-            // TODO: Implement this section when z=2
-            2 => Instruction::Unknown,
+            2 => match (self.q, self.p) {
+                (0, 0) => Instruction::LD(Operand::Indirect16Bit(Register16Bit::BC), Operand::Register8Bit(Register8Bit::A)),
+                (0, 1) => Instruction::LD(Operand::Indirect16Bit(Register16Bit::DE), Operand::Register8Bit(Register8Bit::A)),
+                (0, 2) => Instruction::LD(Operand::IndirectImmediate, Operand::Register16Bit(Register16Bit::HL)),
+                (0, 3) => Instruction::LD(Operand::IndirectImmediate, Operand::Register8Bit(Register8Bit::A)),
+                (1, 0) => Instruction::LD(Operand::Register8Bit(Register8Bit::A), Operand::Indirect16Bit(Register16Bit::BC)),
+                (1, 1) => Instruction::LD(Operand::Register8Bit(Register8Bit::A), Operand::Indirect16Bit(Register16Bit::DE)),
+                (1, 2) => Instruction::LD(Operand::Register16Bit(Register16Bit::HL), Operand::IndirectImmediate),
+                (1, 3) => Instruction::LD(Operand::Register8Bit(Register8Bit::A), Operand::IndirectImmediate),
+                _ => Instruction::Unknown,
+            },
             3 => match self.q {
                 0 => Instruction::Inc(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
                 1 => Instruction::Dec(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
@@ -283,16 +293,5 @@ mod tests {
                 panic!("Should not be an Uknown opcode in the z=0 table");
             }
         }
-    }
-
-    #[test]
-    fn wut() {
-        assert_eq!(
-            Instruction::Add(
-                Operand::Register16Bit(Register16Bit::HL),
-                Operand::Register16Bit(Register16Bit::SP),
-            ),
-            Opcode::new(0b111001).decode()
-        );
     }
 }
