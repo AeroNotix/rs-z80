@@ -84,11 +84,10 @@ pub enum Register16Bit {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Operand {
-    Address(u16),
-    Immediate16(u16),
-    Immediate(u8),
+    Immediate16,
+    Immediate8,
     Indirect16Bit(Register16Bit),
-    Indirect16BitWithOffset(Register16Bit, u8),
+    Indirect16BitWithOffset(Register16Bit, Box<Operand>),
     Register16Bit(Register16Bit),
     Register8Bit(Register8Bit),
 }
@@ -168,10 +167,8 @@ impl Opcode {
                 _ => Instruction::Unknown,
             },
             1 => match self.q {
-                // TODO: Take which register from self.p / rp[p]
-                0 => Instruction::LD(Operand::Register16Bit(Register16Bit::AF), Operand::Immediate16(0)),
-                // TODO: Take which register from self.p / rp[p]
-                1 => Instruction::Add(Operand::Register16Bit(Register16Bit::HL), Operand::Register16Bit(Register16Bit::AF)),
+                0 => Instruction::LD(Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize]), Operand::Immediate16),
+                1 => Instruction::Add(Operand::Register16Bit(Register16Bit::HL), Operand::Register16Bit(REGISTER_TABLE_SP[self.p as usize])),
                 _ => Instruction::Unknown,
 
             },
@@ -184,9 +181,8 @@ impl Opcode {
             }
             4 => Instruction::Inc(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
             5 => Instruction::Dec(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize])),
-            6 => Instruction::LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate(0)),
-            // TODO: Implement this section when z=7
-            7 => Instruction::Unknown,
+            6 => Instruction::LD(Operand::Register8Bit(REGISTER_TABLE_8_BIT[self.y as usize]), Operand::Immediate8),
+            7 => match self.y {
             _ => Instruction::Unknown,
         }
     }
