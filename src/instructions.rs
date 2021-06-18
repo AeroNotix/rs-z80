@@ -195,7 +195,6 @@ impl Opcode {
     }
 
     pub fn decode(self) -> Instruction {
-        println!("{:?}", self);
         match self.x {
             0 => self.decode_x0(),
             1 => self.decode_x1(),

@@ -1,0 +1,5 @@
+    .ORG 000H
+    LD A, B
+    LD B, C
+    LD C, D
+    LD D, E
