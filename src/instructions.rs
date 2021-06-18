@@ -131,12 +131,19 @@ pub struct Opcode {
 
 impl Opcode {
     pub fn new(raw_opcode: u8) -> Opcode {
+        // From: http://www.z80.info/decoding.htm
+
+        // Essentially:
+
+        // 7   6   5   4   3   2   1   0
+        // |-x-|   |---y---|   |---z---|
+        //         |-p-|   q
         Opcode {
             x: (raw_opcode >> 6) & 0x03,
             y: (raw_opcode >> 3) & 0x07,
             z: (raw_opcode >> 0) & 0x07,
             p: (raw_opcode >> 4) & 0x03,
-            q: (raw_opcode >> 3) & 0x03,
+            q: (raw_opcode >> 3) & 0x01,
         }
     }
 
