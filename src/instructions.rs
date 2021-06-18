@@ -31,7 +31,7 @@ const CONDITION_TABLE: [Condition; 5] = [
     Condition::ParityOverflow,
 ];
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Condition {
     NotZero,
     Zero,
@@ -40,7 +40,7 @@ pub enum Condition {
     ParityOverflow,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Flag {
     Carry(bool),
     AddSubtract(bool),
@@ -51,7 +51,7 @@ pub enum Flag {
     X(bool),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Register8Bit {
     A,
     B,
@@ -70,7 +70,7 @@ pub enum Register8Bit {
     IYL,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Register16Bit {
     AF,
     BC,
@@ -82,7 +82,7 @@ pub enum Register16Bit {
     IY,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Operand {
     Address(u16),
     Immediate16(u16),
@@ -93,7 +93,7 @@ pub enum Operand {
     Register8Bit(Register8Bit),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
     Add(Operand, Operand),
     DJNZ,
@@ -203,3 +203,51 @@ impl Opcode {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn run_test(rom: &str, expected_program: Vec<Instruction>) {
+        let program: Vec<Instruction> = fs::read(rom).expect("Unable to read file")
+            .iter()
+            .map(|x| Opcode::new(*x).decode())
+            .collect();
+        assert_eq!(&program[..], &expected_program[..])
+    }
+
+    #[test]
+    fn ld() {
+        let expected_program = vec![
+            Instruction::LD(
+                Operand::Register8Bit(Register8Bit::A),
+                Operand::Register8Bit(Register8Bit::B),
+            ),
+            Instruction::LD(
+                Operand::Register8Bit(Register8Bit::B),
+                Operand::Register8Bit(Register8Bit::C),
+            ),
+            Instruction::LD(
+                Operand::Register8Bit(Register8Bit::C),
+                Operand::Register8Bit(Register8Bit::D),
+            ),
+            Instruction::LD(
+                Operand::Register8Bit(Register8Bit::D),
+                Operand::Register8Bit(Register8Bit::E),
+            ),
+        ];
+        run_test("src/roms/ld.rom", expected_program);
+    }
+
+    #[test]
+    fn inc_dec() {
+        let expected_program = vec![
+            Instruction::Inc(Operand::Register8Bit(Register8Bit::A)),
+            Instruction::Inc(Operand::Register8Bit(Register8Bit::B)),
+            Instruction::Dec(Operand::Register8Bit(Register8Bit::A)),
+            Instruction::Dec(Operand::Register8Bit(Register8Bit::B)),
+        ];
+        run_test("src/roms/inc_dec.rom", expected_program);
+    }
+}
