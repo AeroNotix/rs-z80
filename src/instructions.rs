@@ -23,21 +23,19 @@ const REGISTER_TABLE_AF: [Register16Bit; 4] = [
     Register16Bit::AF,
 ];
 
-const CONDITION_TABLE: [Condition; 5] = [
+const CONDITION_TABLE: [Condition; 4] = [
     Condition::NotZero,
     Condition::Zero,
     Condition::NoCarry,
     Condition::Carry,
-    Condition::ParityOverflow,
 ];
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Condition {
     NotZero,
     Zero,
     NoCarry,
     Carry,
-    ParityOverflow,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -116,8 +114,8 @@ pub enum Instruction {
     RES(u8, Operand),
     BIT(u8, Operand),
     SET(u8, Operand),
-    JR(u8),
-    ConditionalJR(Condition, u8),
+    JR(Operand),
+    ConditionalJR(Condition, Operand),
 
     RLCA,
     RRCA,
@@ -165,14 +163,9 @@ impl Opcode {
                     Operand::Register16Bit(Register16Bit::AF),
                 ),
                 2 => Instruction::DJNZ,
-                // TODO: Some instructions are multi-byte.
-                //
-                // Opcode decoder should act on a stream and
-                // conditionally read bytes from the stream when
-                // needed.
-                3 => Instruction::JR(99),
+                3 => Instruction::JR(Operand::Immediate8),
                 4..=7 => Instruction::ConditionalJR(
-                    Condition::Carry, 123,
+                    CONDITION_TABLE[self.y as usize - 4], Operand::Immediate8,
                 ),
                 _ => Instruction::Unknown,
             },
