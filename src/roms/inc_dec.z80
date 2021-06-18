@@ -1,0 +1,5 @@
+    .ORG 000H
+    INC A
+    INC B
+    DEC A
+    DEC B
