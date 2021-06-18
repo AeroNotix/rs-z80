@@ -273,4 +273,26 @@ mod tests {
         ];
         run_test("src/roms/inc_dec.rom", expected_program);
     }
+
+    #[test]
+    fn decode_x_table_no_panic() {
+        for x in 0..0b00111111 {
+            let raw_opcode = Opcode::new(x);
+            println!("0x{:x} - {:?}", x, raw_opcode.decode());
+            if let Instruction::Unknown = Opcode::new(x).decode() {
+                panic!("Should not be an Uknown opcode in the z=0 table");
+            }
+        }
+    }
+
+    #[test]
+    fn wut() {
+        assert_eq!(
+            Instruction::Add(
+                Operand::Register16Bit(Register16Bit::HL),
+                Operand::Register16Bit(Register16Bit::SP),
+            ),
+            Opcode::new(0b111001).decode()
+        );
+    }
 }

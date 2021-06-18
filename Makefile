@@ -8,4 +8,4 @@ ${ASM_DIR}/%.rom: ${ASM_DIR}/%.z80
 compile: ${TEST_ROMS}
 
 test: compile
-	cargo test
+	cargo test -- --nocapture
