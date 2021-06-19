@@ -127,6 +127,12 @@ impl Instruction {
                 cpu.pc += 1;
                 *lhs.borrow_mut() = cpu.fetch_u8();
             }
+            Inc(CPURegister(reg)) => {
+                *reg.borrow_mut() += 1;
+            }
+            Dec(CPURegister(reg)) => {
+                *reg.borrow_mut() -= 1;
+            }
             el => {
                 println!("{:?}", el);
                 panic!("Not implemented")
