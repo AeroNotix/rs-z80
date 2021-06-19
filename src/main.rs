@@ -1,12 +1,9 @@
+use std::fs;
 mod instructions;
 
 fn main() {
-    for raw_opcode in [0b1111000, 0b1000001, 0b1001010, 0b1010011] {
-        let cpu = instructions::CPU::new();
-        let opcode = instructions::Opcode::from_u8(raw_opcode).decode(&cpu);
-        if let instructions::Instruction::Unknown =  opcode {
-            println!("{:?}", instructions::Opcode::from_u8(raw_opcode));
-        }
-        println!("{:?}", opcode);
+    let mut cpu = instructions::CPU::new(fs::read("src/roms/ld.rom").expect("Unable to read file"));
+    for _ in 1..cpu.program.len() {
+        cpu.decode(cpu.fetch()).execute(&mut cpu);
     }
 }

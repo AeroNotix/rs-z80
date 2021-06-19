@@ -56,6 +56,7 @@ pub enum Register {
     DE,
     HL,
     SP,
+    PC,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -113,13 +114,39 @@ pub enum Instruction {
     Unknown,
 }
 
+impl Instruction {
+    pub fn execute(&self, cpu: &mut CPU) {
+        use Instruction::*;
+        use Operand::*;
+        match self {
+            LD(CPURegister(lhs), CPURegister(rhs)) => {
+                cpu.pc += 1;
+                *lhs.borrow_mut() = *rhs.borrow();
+            },
+            LD(CPURegister(lhs), Immediate8) => {
+                cpu.pc += 1;
+                *lhs.borrow_mut() = cpu.fetch_u8();
+            }
+            el => {
+                println!("{:?}", el);
+                panic!("Not implemented")
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct CPU {
+    pub program: Vec<u8>,
+    pc: u16,
     registers: HashMap<Register, Rc<RefCell<u8>>>,
 }
 
 impl CPU {
-    pub fn new() -> CPU {
+    pub fn new(program: Vec<u8>) -> CPU {
         CPU {
+            program,
+            pc: 0,
             registers: [
                 (Register::A, Rc::new(RefCell::new(0))),
                 (Register::B, Rc::new(RefCell::new(0))),
@@ -137,14 +164,24 @@ impl CPU {
         }
     }
 
+    pub fn fetch_u8(&mut self) -> u8 {
+        let n = self.program[self.pc as usize];
+        self.pc += 1;
+        n
+    }
+
+    pub fn fetch(&self) -> u8 {
+        self.program[self.pc as usize]
+    }
+
+    pub fn decode(&self, opcode: u8) -> Instruction {
+        Opcode::from_u8(opcode).decode(&self)
+    }
+
     fn get_register(&self, reg: Register) -> Rc<RefCell<u8>> {
         self.registers.get(&reg)
             .expect("Requested a register, which wasn't in the CPU. Shouldn't get here")
             .clone()
-    }
-
-    pub fn ld(to: &mut u8, from: u8) {
-        *to = from;
     }
 }
 
@@ -278,7 +315,7 @@ mod opcode_tests {
     use Instruction::*;
     use Operand::*;
 
-    fn run_test(cpu: &CPU, rom: &str, expected_program: Vec<Instruction>) {
+    fn run_test(cpu: &CPU, rom: &str, expected_program: &Vec<Instruction>) {
         let program: Vec<Instruction> = fs::read(rom).expect("Unable to read file")
             .iter()
             .map(|x| Opcode::from_u8(*x).decode(cpu))
@@ -290,12 +327,17 @@ mod opcode_tests {
     fn ld() {
         let cpu = CPU::new();
         let expected_program = vec![
+            LD(CPURegister(cpu.get_register(A)), Immediate8),
             LD(CPURegister(cpu.get_register(A)), CPURegister(cpu.get_register(B))),
             LD(CPURegister(cpu.get_register(B)), CPURegister(cpu.get_register(C))),
             LD(CPURegister(cpu.get_register(C)), CPURegister(cpu.get_register(D))),
             LD(CPURegister(cpu.get_register(D)), CPURegister(cpu.get_register(E))),
         ];
-        run_test(&cpu, "src/roms/ld.rom", expected_program);
+        run_test(&cpu, "src/roms/ld.rom", &expected_program);
+
+        for instruction in expected_program {
+            instruction.execute();
+        }
     }
 
     #[test]
@@ -307,7 +349,7 @@ mod opcode_tests {
             Dec(CPURegister(cpu.get_register(A))),
             Dec(CPURegister(cpu.get_register(B))),
         ];
-        run_test(&cpu, "src/roms/inc_dec.rom", expected_program);
+        run_test(&cpu, "src/roms/inc_dec.rom", &expected_program);
     }
 
     #[test]
