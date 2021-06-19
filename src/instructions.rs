@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 const REGISTER_TABLE_8_BIT: [Register; 8] = [
     Register::B,
@@ -61,9 +63,9 @@ pub enum Operand {
     Immediate16,
     Immediate8,
     IndirectImmediate,
-    IndirectRegister(Register),
-    IndirectWithOffset(Register, Box<Operand>),
-    CPURegister(Register),
+    IndirectRegister(Rc<RefCell<u8>>),
+    IndirectWithOffset(Rc<RefCell<u8>>, Rc<RefCell<u8>>),
+    CPURegister(Rc<RefCell<u8>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -112,22 +114,33 @@ pub enum Instruction {
 }
 
 pub struct CPU {
-    registers: HashMap<Register, Box<u8>>,
+    registers: HashMap<Register, Rc<RefCell<u8>>>,
 }
 
 impl CPU {
     pub fn new() -> CPU {
         CPU {
             registers: [
-                (Register::A, Box::new(0)),
-                (Register::B, Box::new(0)),
-                (Register::C, Box::new(0)),
-                (Register::D, Box::new(0)),
-                (Register::E, Box::new(0)),
-                (Register::H, Box::new(0)),
-                (Register::L, Box::new(0)),
+                (Register::A, Rc::new(RefCell::new(0))),
+                (Register::B, Rc::new(RefCell::new(0))),
+                (Register::C, Rc::new(RefCell::new(0))),
+                (Register::D, Rc::new(RefCell::new(0))),
+                (Register::E, Rc::new(RefCell::new(0))),
+                (Register::H, Rc::new(RefCell::new(0))),
+                (Register::L, Rc::new(RefCell::new(0))),
+                (Register::AF, Rc::new(RefCell::new(0))),
+                (Register::BC, Rc::new(RefCell::new(0))),
+                (Register::DE, Rc::new(RefCell::new(0))),
+                (Register::HL, Rc::new(RefCell::new(0))),
+                (Register::SP, Rc::new(RefCell::new(0))),
             ].iter().cloned().collect()
         }
+    }
+
+    fn get_register(&self, reg: Register) -> Rc<RefCell<u8>> {
+        self.registers.get(&reg)
+            .expect("Requested a register, which wasn't in the CPU. Shouldn't get here")
+            .clone()
     }
 
     pub fn ld(to: &mut u8, from: u8) {
@@ -162,16 +175,16 @@ impl Opcode {
         }
     }
 
-    fn decode_x0(self) -> Instruction {
+    fn decode_x0(self, cpu: &CPU) -> Instruction {
         use Instruction::*;
-        use Register::*;
         use Operand::*;
+        use Register::*;
         match self.z {
             0 => match self.y {
                 0 => NOP,
                 1 => Exchange(
-                    CPURegister(AF),
-                    CPURegister(AF),
+                    CPURegister(cpu.get_register(AF)),
+                    CPURegister(cpu.get_register(AF)),
                 ),
                 2 => DJNZ,
                 3 => JR(Immediate8),
@@ -182,30 +195,30 @@ impl Opcode {
                 _ => Unknown,
             },
             1 => match self.q {
-                0 => LD(CPURegister(REGISTER_TABLE_SP[self.p as usize]), Immediate16),
-                1 => Add(CPURegister(HL), CPURegister(REGISTER_TABLE_SP[self.p as usize])),
+                0 => LD(CPURegister(cpu.get_register(REGISTER_TABLE_SP[self.p as usize])), Immediate16),
+                1 => Add(CPURegister(cpu.get_register(HL)), CPURegister(cpu.get_register(REGISTER_TABLE_SP[self.p as usize]))),
                 _ => Unknown,
 
             },
             2 => match (self.q, self.p) {
-                (0, 0) => LD(IndirectRegister(BC), CPURegister(A)),
-                (0, 1) => LD(IndirectRegister(DE), CPURegister(A)),
-                (0, 2) => LD(IndirectImmediate, CPURegister(HL)),
-                (0, 3) => LD(IndirectImmediate, CPURegister(A)),
-                (1, 0) => LD(CPURegister(A), IndirectRegister(BC)),
-                (1, 1) => LD(CPURegister(A), IndirectRegister(DE)),
-                (1, 2) => LD(CPURegister(HL), IndirectImmediate),
-                (1, 3) => LD(CPURegister(A), IndirectImmediate),
+                (0, 0) => LD(IndirectRegister(cpu.get_register(BC)), CPURegister(cpu.get_register(A))),
+                (0, 1) => LD(IndirectRegister(cpu.get_register(DE)), CPURegister(cpu.get_register(A))),
+                (0, 2) => LD(IndirectImmediate, CPURegister(cpu.get_register(HL))),
+                (0, 3) => LD(IndirectImmediate, CPURegister(cpu.get_register(A))),
+                (1, 0) => LD(CPURegister(cpu.get_register(A)), IndirectRegister(cpu.get_register(BC))),
+                (1, 1) => LD(CPURegister(cpu.get_register(A)), IndirectRegister(cpu.get_register(DE))),
+                (1, 2) => LD(CPURegister(cpu.get_register(HL)), IndirectImmediate),
+                (1, 3) => LD(CPURegister(cpu.get_register(A)), IndirectImmediate),
                 _ => Unknown,
             },
             3 => match self.q {
-                0 => Inc(CPURegister(REGISTER_TABLE_SP[self.p as usize])),
-                1 => Dec(CPURegister(REGISTER_TABLE_SP[self.p as usize])),
+                0 => Inc(CPURegister(cpu.get_register(REGISTER_TABLE_SP[self.p as usize]))),
+                1 => Dec(CPURegister(cpu.get_register(REGISTER_TABLE_SP[self.p as usize]))),
                 _ => Unknown,
             }
-            4 => Inc(CPURegister(REGISTER_TABLE_8_BIT[self.y as usize])),
-            5 => Dec(CPURegister(REGISTER_TABLE_8_BIT[self.y as usize])),
-            6 => LD(CPURegister(REGISTER_TABLE_8_BIT[self.y as usize]), Immediate8),
+            4 => Inc(CPURegister(cpu.get_register(REGISTER_TABLE_8_BIT[self.y as usize]))),
+            5 => Dec(CPURegister(cpu.get_register(REGISTER_TABLE_8_BIT[self.y as usize]))),
+            6 => LD(CPURegister(cpu.get_register(REGISTER_TABLE_8_BIT[self.y as usize])), Immediate8),
             7 => match self.y {
                 0 => RLCA,
                 1 => RRCA,
@@ -222,20 +235,20 @@ impl Opcode {
         }
     }
 
-    fn decode_x1(self) -> Instruction {
+    fn decode_x1(self, cpu: &CPU) -> Instruction {
         if self.y == 6 {
             return Instruction::Halt;
         }
         Instruction::LD(
-            Operand::CPURegister(REGISTER_TABLE_8_BIT[self.y as usize]),
-            Operand::CPURegister(REGISTER_TABLE_8_BIT[self.z as usize]),
+            Operand::CPURegister(cpu.get_register(REGISTER_TABLE_8_BIT[self.y as usize])),
+            Operand::CPURegister(cpu.get_register(REGISTER_TABLE_8_BIT[self.z as usize])),
         )
     }
 
-    pub fn decode(self) -> Instruction {
+    pub fn decode(self, cpu: &CPU) -> Instruction {
         match self.x {
-            0 => self.decode_x0(),
-            1 => self.decode_x1(),
+            0 => self.decode_x0(cpu),
+            1 => self.decode_x1(cpu),
             _ => Instruction::Unknown,
         }
     }
@@ -243,49 +256,67 @@ impl Opcode {
 
 
 #[cfg(test)]
-mod tests {
+mod cpu_tests {
+    use super::*;
+
+    #[test]
+    fn get_register_for_cpu() {
+        let cpu = CPU::new();
+        let reg0 = cpu.get_register(Register::A);
+        *reg0.borrow_mut() = 123;
+        let reg1 = cpu.get_register(Register::A);
+        assert_eq!(123, *reg1.borrow());
+    }
+}
+
+
+#[cfg(test)]
+mod opcode_tests {
     use super::*;
     use std::fs;
     use Register::*;
     use Instruction::*;
     use Operand::*;
 
-    fn run_test(rom: &str, expected_program: Vec<Instruction>) {
+    fn run_test(cpu: &CPU, rom: &str, expected_program: Vec<Instruction>) {
         let program: Vec<Instruction> = fs::read(rom).expect("Unable to read file")
             .iter()
-            .map(|x| Opcode::from_u8(*x).decode())
+            .map(|x| Opcode::from_u8(*x).decode(cpu))
             .collect();
         assert_eq!(&program[..], &expected_program[..])
     }
 
     #[test]
     fn ld() {
+        let cpu = CPU::new();
         let expected_program = vec![
-            LD(CPURegister(Register::A), CPURegister(Register::B)),
-            LD(CPURegister(Register::B), CPURegister(Register::C)),
-            LD(CPURegister(Register::C), CPURegister(Register::D)),
-            LD(CPURegister(Register::D), CPURegister(Register::E)),
+            LD(CPURegister(cpu.get_register(A)), CPURegister(cpu.get_register(B))),
+            LD(CPURegister(cpu.get_register(B)), CPURegister(cpu.get_register(C))),
+            LD(CPURegister(cpu.get_register(C)), CPURegister(cpu.get_register(D))),
+            LD(CPURegister(cpu.get_register(D)), CPURegister(cpu.get_register(E))),
         ];
-        run_test("src/roms/ld.rom", expected_program);
+        run_test(&cpu, "src/roms/ld.rom", expected_program);
     }
 
     #[test]
     fn inc_dec() {
+        let cpu = CPU::new();
         let expected_program = vec![
-            Inc(CPURegister(A)),
-            Inc(CPURegister(B)),
-            Dec(CPURegister(A)),
-            Dec(CPURegister(B)),
+            Inc(CPURegister(cpu.get_register(A))),
+            Inc(CPURegister(cpu.get_register(B))),
+            Dec(CPURegister(cpu.get_register(A))),
+            Dec(CPURegister(cpu.get_register(B))),
         ];
-        run_test("src/roms/inc_dec.rom", expected_program);
+        run_test(&cpu, "src/roms/inc_dec.rom", expected_program);
     }
 
     #[test]
     fn x_table_all_valid() {
+        let cpu = CPU::new();
         for x in 0..0b00111111 {
             let raw_opcode = Opcode::from_u8(x);
-            println!("0x{:x} - {:?}", x, raw_opcode.decode());
-            if let Unknown = Opcode::from_u8(x).decode() {
+            println!("0x{:x} - {:?}", x, raw_opcode.decode(&cpu));
+            if let Unknown = Opcode::from_u8(x).decode(&cpu) {
                 panic!("Should not be an Uknown opcode in the z=0 table");
             }
         }
